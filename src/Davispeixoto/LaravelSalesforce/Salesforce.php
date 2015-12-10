@@ -50,7 +50,7 @@ class Salesforce
 
         // here we'll first try to activate a previous connection, so subsequent
         // calls will not have to login again and again, keeping SalesForce
-        // login limites under control
+        // login limits under control
 
         try {
 
@@ -60,7 +60,6 @@ class Salesforce
 
             // if yes...
             if($location_isset or $sessionid_isset) {
-
                 // restores previous
                 $this->sfh->setEndpoint($_SESSION['sforce_location']);
                 $this->sfh->setSessionHeader($_SESSION['sforce_sessionid']);
