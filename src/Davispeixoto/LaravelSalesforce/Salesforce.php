@@ -1,7 +1,7 @@
 <?php namespace Davispeixoto\LaravelSalesforce;
 
 use Davispeixoto\ForceDotComToolkitForPhp\SforceEnterpriseClient as Client;
-use SalesforceException;
+use Exception;
 use Illuminate\Config\Repository;
 
 /**
@@ -17,9 +17,9 @@ class Salesforce
 {
 
     /**
-     * @var Client $sfh The Salesforce Handler
+     * @var \Davispeixoto\ForceDotComToolkitForPhp\SforceEnterpriseClient sfh The Salesforce Handler
      */
-    private $sfh;
+    public $sfh;
 
     /**
      * The constructor.
@@ -32,23 +32,50 @@ class Salesforce
      */
     public function __construct(Repository $configExternal)
     {
+        session_start();
+
+        $wsdl = $configExternal->get('laravel-salesforce::wsdl');
+
+        if (empty($wsdl)) {
+            $wsdl = __DIR__ . '/Wsdl/enterprise.wsdl.xml';
+        }
+        
+        $username = $configExternal->get('laravel-salesforce::username');
+        $password = $configExternal->get('laravel-salesforce::password');
+        $token = $configExternal->get('laravel-salesforce::token');
+
+        $this->sfh = new Client();
+        $this->sfh->createConnection($wsdl);
+
+
+        // here we'll first try to activate a previous connection, so subsequent
+        // calls will not have to login again and again, keeping SalesForce
+        // login limites under control
+
         try {
-            $this->sfh = new Client();
 
-            $wsdl = $configExternal->get('laravel-salesforce::wsdl');
+            // checks if some other login was cached
+            $location_isset = isset($_SESSION['sforce_location']);
+            $sessionid_isset = isset($_SESSION['sforce_sessionid']);
 
-            if (empty($wsdl)) {
-                $wsdl = __DIR__ . '/Wsdl/enterprise.wsdl.xml';
+            // if yes...
+            if($location_isset or $sessionid_isset) {
+
+                // restores previous
+                $this->sfh->setEndpoint($_SESSION['sforce_location']);
+                $this->sfh->setSessionHeader($_SESSION['sforce_sessionid']);
+
+            // otherwise..
+            } else {
+
+                // logs in
+                $this->sfh->login($username, $password . $token);
+
+                // and cache login data
+                $_SESSION['sforce_location'] = $this->sfh->getLocation();
+                $_SESSION['sforce_sessionid'] = $this->sfh->getSessionId();
             }
 
-            $this->sfh->createConnection($wsdl);
-
-            $username = $configExternal->get('laravel-salesforce::username');
-            $password = $configExternal->get('laravel-salesforce::password');
-            $token = $configExternal->get('laravel-salesforce::token');
-
-            $this->sfh->login($username, $password . $token);
-            
         } catch (Exception $e) {
             throw new SalesforceException('Exception at Constructor' . $e->getMessage() . "\n\n" . $e->getTraceAsString());
         }
